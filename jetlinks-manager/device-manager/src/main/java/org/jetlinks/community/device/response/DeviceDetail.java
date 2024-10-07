@@ -318,6 +318,7 @@ public class DeviceDetail {
         setState(device.getState());
         setParentId(device.getParentId());
         setDescription(device.getDescribe());
+        setOrgId(device.getOrgId());
         if (device.getFeatures() != null) {
             withFeatures(Arrays.asList(device.getFeatures()));
         }

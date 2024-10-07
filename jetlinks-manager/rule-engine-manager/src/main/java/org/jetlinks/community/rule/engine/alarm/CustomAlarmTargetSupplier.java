@@ -17,6 +17,7 @@ public class CustomAlarmTargetSupplier implements AlarmTargetSupplier {
         register(new ProductAlarmTarget());
         register(new DeviceAlarmTarget());
         register(new OtherAlarmTarget());
+        register(new OrgAlarmTarget());
     }
 
     public static void register(AlarmTarget target) {

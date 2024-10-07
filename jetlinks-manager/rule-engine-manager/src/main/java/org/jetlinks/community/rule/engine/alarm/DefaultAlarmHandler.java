@@ -6,6 +6,8 @@ import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.i18n.LocaleUtils;
 import org.hswebframework.web.id.IDGenerator;
+import org.jetlinks.community.device.response.DeviceDetail;
+import org.jetlinks.community.device.service.LocalDeviceInstanceService;
 import org.jetlinks.core.config.ConfigStorageManager;
 import org.jetlinks.core.event.EventBus;
 import org.jetlinks.core.utils.Reactors;
@@ -43,51 +45,74 @@ public class DefaultAlarmHandler implements AlarmHandler {
 
     private final ApplicationEventPublisher eventPublisher;
 
+    private final LocalDeviceInstanceService service;
+
     @Override
     public Mono<AlarmResult> triggerAlarm(AlarmInfo alarmInfo) {
+
+
+
+
         return getRecordCache(createRecordId(alarmInfo))
             .map(this::ofRecordCache)
             .defaultIfEmpty(new AlarmResult())
             .flatMap(result -> {
                 AlarmRecordEntity record = ofRecord(result, alarmInfo);
-                //更新告警状态.
-                return alarmRecordService
-                    .createUpdate()
-                    .set(record)
-                    .where(AlarmRecordEntity::getId, record.getId())
-                    .and(AlarmRecordEntity::getState, AlarmRecordState.warning)
-                    .execute()
-                    //更新数据库报错,依然尝试触发告警!
-                    .onErrorResume(err -> {
-                        log.error("trigger alarm error", err);
-                        return Reactors.ALWAYS_ZERO;
-                    })
-                    .flatMap(total -> {
-                        AlarmHistoryInfo historyInfo = createHistory(record, alarmInfo);
+                //如果是组织, 添加组织ID
+                Mono<DeviceDetail> deviceDetailMono = alarmInfo.getTargetType().equals("org")
+                    ? service.getDeviceDetail(alarmInfo.getSourceId())
+                    : Mono.empty(); // 如果不满足条件，则返回一个空的 Mono
 
-                        //更新结果返回0 说明是新产生的告警数据
-                        if (total == 0) {
-                            result.setFirstAlarm(true);
-                            result.setAlarming(false);
-                            result.setAlarmTime(historyInfo.getAlarmTime());
-                            record.setAlarmTime(historyInfo.getAlarmTime());
-                            record.setHandleTime(null);
-                            record.setHandleType(null);
+                return deviceDetailMono
+                              .map(deviceDetail -> {
+                                  // 使用 deviceDetail 更新 record 或 alarmInfo
+                                  record.setTargetId(deviceDetail.getOrgId()); // 假设有 getTypeId 方法
+//                                  alarmInfo.setTargetId(deviceDetail.getOrgId());
+                                  return record; // 返回更新后的 record
+                              })
+                              .defaultIfEmpty(record) // 如果没有 deviceDetail，则使用原始 record
+                              .flatMap(updatedRecord -> {
+                                  //更新告警状态.
+                                  return alarmRecordService
+                                      .createUpdate()
+                                      .set(updatedRecord)
+                                      .where(AlarmRecordEntity::getId, updatedRecord.getId())
+                                      .and(AlarmRecordEntity::getState, AlarmRecordState.warning)
+                                      .execute()
+                                      //更新数据库报错,依然尝试触发告警!
+                                      .onErrorResume(err -> {
+                                          log.error("trigger alarm error", err);
+                                          return Reactors.ALWAYS_ZERO;
+                                      })
+                                      .flatMap(total -> {
+                                          AlarmHistoryInfo historyInfo = createHistory(updatedRecord, alarmInfo);
 
-                            return this
-                                .saveAlarmRecord(record)
-                                .then(historyService.save(historyInfo))
-                                .then(publishAlarmRecord(historyInfo, alarmInfo))
-                                .then(publishEvent(historyInfo))
-                                .then(saveAlarmCache(result, record));
-                        }
-                        result.setFirstAlarm(false);
-                        result.setAlarming(true);
-                        return historyService
-                            .save(historyInfo)
-                            .then(publishEvent(historyInfo))
-                            .then(saveAlarmCache(result, record));
-                    });
+                                          //更新结果返回0 说明是新产生的告警数据
+                                          if (total == 0) {
+                                              result.setFirstAlarm(true);
+                                              result.setAlarming(false);
+                                              result.setAlarmTime(historyInfo.getAlarmTime());
+                                              record.setAlarmTime(historyInfo.getAlarmTime());
+                                              record.setHandleTime(null);
+                                              record.setHandleType(null);
+
+                                              return this
+                                                  .saveAlarmRecord(updatedRecord)
+                                                  .then(historyService.save(historyInfo))
+                                                  .then(publishAlarmRecord(historyInfo, alarmInfo))
+                                                  .then(publishEvent(historyInfo))
+                                                  .then(saveAlarmCache(result, updatedRecord));
+                                          }
+                                          result.setFirstAlarm(false);
+                                          result.setAlarming(true);
+                                          return historyService
+                                              .save(historyInfo)
+                                              .then(publishEvent(historyInfo))
+                                              .then(saveAlarmCache(result, updatedRecord));
+                                      });
+                              });
+
+
             });
 
     }

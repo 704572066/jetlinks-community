@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import org.hswebframework.web.authorization.ReactiveAuthenticationHolder;
 import org.hswebframework.web.crud.events.*;
 import org.hswebframework.web.exception.BusinessException;
+import org.jetlinks.community.device.response.DeviceDetail;
+import org.jetlinks.community.device.service.LocalDeviceInstanceService;
 import org.jetlinks.core.event.EventBus;
 import org.jetlinks.core.event.Subscription;
 import org.jetlinks.community.gateway.annotation.Subscribe;
@@ -48,6 +50,7 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
     private final AlarmHistoryService alarmHistoryService;
 
     private final ApplicationEventPublisher publisher;
+
     /**
      * {
      * "场景Id":{
@@ -71,7 +74,6 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
                         .getName(), data.getOutput()))
                     .flatMap(targetInfo -> {
                         AlarmRecordEntity record = ofRecord(targetInfo, alarmConfig);
-
                         return alarmRecordService
                             .createUpdate()
                             .set(record)
