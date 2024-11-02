@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 java $JAVA_OPTS -server \
 -XX:+UnlockExperimentalVMOptions \
 -XX:+UseCGroupMemoryLimitForHeap \
