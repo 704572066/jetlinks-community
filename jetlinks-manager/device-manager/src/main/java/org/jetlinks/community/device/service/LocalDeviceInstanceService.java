@@ -123,6 +123,12 @@ public class LocalDeviceInstanceService extends GenericReactiveCrudService<Devic
             .as(super::save);
     }
 
+    public Flux<DeviceInstanceEntity> findByDeviceId(String deviceId) {
+        return createQuery()
+            .and(DeviceInstanceEntity::getId, deviceId)
+            .fetch();
+    }
+
     private Flux<DeviceInstanceEntity> findByProductId(String productId) {
         return createQuery()
             .and(DeviceInstanceEntity::getProductId, productId)
