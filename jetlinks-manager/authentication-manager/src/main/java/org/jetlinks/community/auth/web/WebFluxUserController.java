@@ -104,7 +104,7 @@ public class WebFluxUserController extends org.hswebframework.web.system.authori
                     .map(Authentication::getUser)
                     .map(User::getUsername)
                     .flatMap(username -> reactiveUserService
-                        .findByUsernameAndPassword(username, password, "")
+                        .findByUsernameAndPassword(username, password, "","")
                         .flatMap(ignore -> Mono.just(ValidationResult.success())))
                     .switchIfEmpty(Mono.just(ValidationResult
                                                  .error(LocaleUtils

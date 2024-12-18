@@ -7,9 +7,11 @@ import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.i18n.LocaleUtils;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.system.authorization.defaults.service.DefaultDimensionService;
+import org.jetlinks.community.auth.service.WeChatSubsribeService;
 import org.jetlinks.community.device.response.DeviceDetail;
 import org.jetlinks.community.device.service.LocalDeviceInstanceService;
 import org.jetlinks.community.rule.engine.service.UniPushService;
+import org.jetlinks.community.rule.engine.service.WeChatPushService;
 import org.jetlinks.core.config.ConfigStorageManager;
 import org.jetlinks.core.event.EventBus;
 import org.jetlinks.core.utils.Reactors;
@@ -32,6 +34,9 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 @Slf4j
@@ -54,6 +59,10 @@ public class DefaultAlarmHandler implements AlarmHandler {
     private final LocalDeviceInstanceService service;
 
     private final UniPushService uniPushService;
+
+    private final WeChatPushService weChatPushService;
+
+    private final WeChatSubsribeService weChatSubsribeService;
 
     private final LocalDeviceInstanceService localDeviceInstanceService;
 
@@ -104,15 +113,48 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                               // 转换为自定义的日期时间格式
                                               DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                                               String alarmTime = now.format(formatter);
+//                                              localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
+//                                                                        .map(dev->dev.getOrgId())
+//                                                                        .filter(orgId -> orgId != null)
+//                                                                        .flatMap(orgId->defaultDimensionService.getCidByDimensionId(orgId))
+//                                                                        .filter(cidList -> !cidList.isEmpty())
+//                                                                        .flatMap(cidList->uniPushService.sendPostRequest("https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage", cidList, "设备告警 "+alarmTime,alarmInfo.getTargetName()+"["+alarmInfo.getSourceId()+"]: "+alarmInfo.getAlarmName(),"warning"))
+//                                                                        .subscribe(e->log.error("triggerAlarm unipush2.0 error: {}", e));
+
                                               localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
-                                                                        .map(dev->dev.getOrgId())
+                                                                        .map(dev -> dev.getOrgId())
                                                                         .filter(orgId -> orgId != null)
-                                                                        .flatMap(orgId->defaultDimensionService.getCidIdByDimensionId(orgId))
-//                                  .filter(cid -> cid != null)  // 如果 cidId 为空则停止流，不进行后续操作
-//                                  .filter(Objects::nonNull)
-                                                                        .filter(cidList -> !cidList.isEmpty())
-                                                                        .flatMap(cidList->uniPushService.sendPostRequest("https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage", cidList, "设备告警 "+alarmTime,alarmInfo.getTargetName()+"["+alarmInfo.getSourceId()+"]: "+alarmInfo.getAlarmName(),"warning"))
-                                                                        .subscribe(e->log.error("triggerAlarm unipush2.0 error: {}", e));
+                                                                        .flatMap(orgId -> defaultDimensionService.getByDimensionId(orgId))
+                                                                        .filter(entity -> entity != null)
+                                                                        .flatMap(entity -> {
+                                                                            // Send to UniPush if CID is not empty
+                                                                            log.warn("cid: "+entity.getCid());
+                                                                            if (!entity.getCid().isEmpty()) {
+                                                                                List<String> cidList = new ArrayList<>();
+                                                                                cidList.add(entity.getCid());
+                                                                                return uniPushService.sendPostRequest(
+                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
+                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
+                                                                                    "设备告警 " + alarmTime,
+                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
+                                                                                    "warning")
+                                                                                                     .then(Mono.just(entity));  // Ensure the entity continues down the flow
+                                                                            }
+                                                                            return Mono.just(entity);  // If no CID to send, just return entity
+                                                                        })
+                                                                        .flatMap(entity -> weChatSubsribeService.findByUnionId(entity.getUnionid()))
+                                                                        .filter(Objects::nonNull)
+                                                                        .filter(subscriber -> !subscriber.getId().isEmpty())
+                                                                        .flatMap(subscriber -> weChatPushService.sendPostRequest(
+                                                                            subscriber.getId(),
+                                                                            alarmTime,
+                                                                            alarmInfo.getTargetName(),
+                                                                            alarmInfo.getSourceId(),
+                                                                            alarmInfo.getAlarmName()
+                                                                        ))
+                                                                        .subscribe(e->log.error("triggerAlarm push error: {}", e));
+//                                                                        .doOnError(e -> log.error("Error processing alarm push: {}", e))  // Log errors
+//                                                                        .onErrorResume(e -> Mono.empty());  // Avoid stream termination due to error
 
 
 
