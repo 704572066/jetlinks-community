@@ -6,6 +6,7 @@ import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.i18n.LocaleUtils;
 import org.hswebframework.web.id.IDGenerator;
+import org.hswebframework.web.system.authorization.api.entity.DimensionUserEntity;
 import org.hswebframework.web.system.authorization.defaults.service.DefaultDimensionService;
 import org.jetlinks.community.auth.service.WeChatSubsribeService;
 import org.jetlinks.community.device.response.DeviceDetail;
@@ -30,6 +31,7 @@ import org.jetlinks.community.utils.ObjectMappers;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import sun.reflect.generics.tree.VoidDescriptor;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -38,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @AllArgsConstructor
@@ -121,38 +124,105 @@ public class DefaultAlarmHandler implements AlarmHandler {
 //                                                                        .flatMap(cidList->uniPushService.sendPostRequest("https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage", cidList, "设备告警 "+alarmTime,alarmInfo.getTargetName()+"["+alarmInfo.getSourceId()+"]: "+alarmInfo.getAlarmName(),"warning"))
 //                                                                        .subscribe(e->log.error("triggerAlarm unipush2.0 error: {}", e));
 
+//                                              localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
+//                                                                        .map(dev -> dev.getOrgId())
+//                                                                        .filter(orgId -> orgId != null)
+//                                                                        .flatMap(orgId -> defaultDimensionService.getByDimensionId(orgId))
+//                                                                        .filter(entity -> entity != null)
+//                                                                        .flatMap(entity -> {
+//                                                                            // Send to UniPush if CID is not empty
+//                                                                            log.warn("cid: "+entity.getCid());
+//                                                                            if (!entity.getCid().isEmpty()) {
+//                                                                                List<String> cidList = new ArrayList<>();
+//                                                                                cidList.add(entity.getCid());
+//                                                                                return uniPushService.sendPostRequest(
+//                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
+//                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
+//                                                                                    "设备告警 " + alarmTime,
+//                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
+//                                                                                    "warning")
+//                                                                                                     .then(Mono.just(entity));  // Ensure the entity continues down the flow
+//                                                                            }
+//                                                                            return Mono.just(entity);  // If no CID to send, just return entity
+//                                                                        })
+//                                                                        .flatMap(entity -> weChatSubsribeService.findByUnionId(entity.getUnionid()))
+//                                                                        .filter(Objects::nonNull)
+//                                                                        .filter(subscriber -> !subscriber.getId().isEmpty())
+//                                                                        .flatMap(subscriber -> weChatPushService.sendPostRequest(
+//                                                                            subscriber.getId(),
+//                                                                            alarmTime,
+//                                                                            alarmInfo.getTargetName(),
+//                                                                            alarmInfo.getSourceId(),
+//                                                                            alarmInfo.getAlarmName()
+//                                                                        ))
+//                                                                        .subscribe(e->log.error("triggerAlarm push error: {}", e));
+//                                                                        .doOnError(e -> log.error("Error processing alarm push: {}", e))  // Log errors
+//                                                                        .onErrorResume(e -> Mono.empty());  // Avoid stream termination due to error
                                               localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
                                                                         .map(dev -> dev.getOrgId())
                                                                         .filter(orgId -> orgId != null)
-                                                                        .flatMap(orgId -> defaultDimensionService.getByDimensionId(orgId))
-                                                                        .filter(entity -> entity != null)
-                                                                        .flatMap(entity -> {
+                                                                        .flatMap(orgId -> defaultDimensionService.getDimensionUserListByDimensionId(orgId))
+                                                                        .filter(entityList -> !entityList.isEmpty())
+                                                                        .flatMap(entityList -> {
                                                                             // Send to UniPush if CID is not empty
-                                                                            log.warn("cid: "+entity.getCid());
-                                                                            if (!entity.getCid().isEmpty()) {
-                                                                                List<String> cidList = new ArrayList<>();
-                                                                                cidList.add(entity.getCid());
+                                                                            List<String> cidList = entityList.stream()
+                                                                                                             .map(DimensionUserEntity::getCid) // Apply the transformation: getName() of each Entity
+                                                                                                             .filter(cid -> cid != null && !cid.isEmpty())
+                                                                                                             .collect(Collectors
+                                                                                                                          .toList()); // Collect the result into a new list
+//                                                                            log.warn("cid: "+entity.getCid());
+                                                                            if (!cidList.isEmpty()) {
+//                                                                                List<String> cidList = new ArrayList<>();
+//                                                                                cidList.add(entity.getCid());
                                                                                 return uniPushService.sendPostRequest(
                                                                                     "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
                                                                                     cidList,  // Assuming 'cid' is a List<String> for the POST request
                                                                                     "设备告警 " + alarmTime,
                                                                                     alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
                                                                                     "warning")
-                                                                                                     .then(Mono.just(entity));  // Ensure the entity continues down the flow
+                                                                                                     .then(Mono.just(entityList));  // Ensure the entity continues down the flow
                                                                             }
-                                                                            return Mono.just(entity);  // If no CID to send, just return entity
+                                                                            return Mono.just(entityList);  // If no CID to send, just return entity
                                                                         })
-                                                                        .flatMap(entity -> weChatSubsribeService.findByUnionId(entity.getUnionid()))
-                                                                        .filter(Objects::nonNull)
-                                                                        .filter(subscriber -> !subscriber.getId().isEmpty())
-                                                                        .flatMap(subscriber -> weChatPushService.sendPostRequest(
-                                                                            subscriber.getId(),
-                                                                            alarmTime,
-                                                                            alarmInfo.getTargetName(),
-                                                                            alarmInfo.getSourceId(),
-                                                                            alarmInfo.getAlarmName()
-                                                                        ))
-                                                                        .subscribe(e->log.error("triggerAlarm push error: {}", e));
+                                                                        .flatMap(entityList -> {
+                                                                            List<String> unionidList = entityList.stream()
+                                                                                                             .map(DimensionUserEntity::getUnionid) // Apply the transformation: getName() of each Entity
+                                                                                                             .collect(Collectors
+                                                                                                                          .toList()); // Collect the result into a new list
+//
+                                                                            return weChatSubsribeService.findOpenidListByUnionId(unionidList);
+
+                                                                        })
+//                                                                        .filter(openidList -> !openidList.isEmpty())
+//                                                                        .filter(openid -> !openid.isEmpty())
+                                                                        .flatMap(openids -> {
+                                                                            // Send requests for each openid asynchronously
+                                                                            List<Mono<Void>> sendRequests = openids.stream()
+                                                                                                                   .filter(openid -> openid != null && !openid.isEmpty())  // Check if each openid is valid
+                                                                                                                   .map(openid -> {
+                                                                                                                       return weChatPushService.sendPostRequest(
+                                                                                                                           openid,
+                                                                                                                           alarmTime,
+                                                                                                                           alarmInfo.getTargetName(),
+                                                                                                                           alarmInfo.getSourceId(),
+                                                                                                                           alarmInfo.getAlarmName()
+                                                                                                                       ).onErrorResume(e -> {
+                                                                                                                           log.error("Failed to send alarm to openid {}: {}", openid, e.getMessage());
+                                                                                                                           return Mono.empty();  // Continue the flow even if one request fails
+                                                                                                                       });
+                                                                                                                   })
+                                                                                                                   .collect(Collectors.toList());
+
+                                                                            // Use Mono.when to combine multiple Mono operations and wait for all to complete
+                                                                            return Mono.when(sendRequests);
+                                                                        })
+                                                                        .doOnTerminate(() -> {
+                                                                            log.info("Finished processing all push requests");
+                                                                        })
+                                                                        .doOnError(e -> {
+                                                                            log.error("Error processing alarm push: {}", e.getMessage());
+                                                                        })
+                                                                        .subscribe();
 //                                                                        .doOnError(e -> log.error("Error processing alarm push: {}", e))  // Log errors
 //                                                                        .onErrorResume(e -> Mono.empty());  // Avoid stream termination due to error
 

@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Service
 public class WeChatSubsribeService extends GenericReactiveCrudService<WeChatSubscribeEntity, String> {
 
@@ -13,6 +15,15 @@ public class WeChatSubsribeService extends GenericReactiveCrudService<WeChatSubs
         return createQuery()
             .where(WeChatSubscribeEntity::getUinonid, unionId)
             .fetchOne();
+    }
+
+    public Mono<List<String>> findOpenidListByUnionId(List<String> unionids) {
+        return createQuery()
+//            .where(WeChatSubscribeEntity::getUinonid, unionId)
+            .where(WeChatSubscribeEntity::getStatus, 1).in(WeChatSubscribeEntity::getUinonid, unionids)
+            .fetch()
+            .map(WeChatSubscribeEntity::getId)
+            .collectList();
     }
 
 
