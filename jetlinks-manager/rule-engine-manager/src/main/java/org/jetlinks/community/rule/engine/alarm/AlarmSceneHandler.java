@@ -261,6 +261,7 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
         entity.setState(AlarmRecordState.warning);
         entity.setAlarmTime(System.currentTimeMillis());
         entity.setLevel(alarmConfigEntity.getLevel());
+        entity.setFireInvoke(alarmConfigEntity.getFireInvoke());
         entity.setTargetType(targetInfo.getTargetType());
         entity.setTargetName(targetInfo.getTargetName());
         entity.setTargetId(targetInfo.getTargetId());

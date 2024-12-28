@@ -89,6 +89,10 @@ public class AlarmRecordEntity extends GenericEntity<String> {
     @Schema(description = "告警级别")
     private Integer level;
 
+    @Column
+    @Schema(description = "app是否显示灭火操作按钮")
+    private Boolean fireInvoke;
+
     @Column(length = 32)
     @Schema(description = "告警记录状态")
     @EnumCodec

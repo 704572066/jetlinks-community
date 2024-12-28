@@ -8,6 +8,7 @@ public interface AlarmConstants {
         String firstAlarm = "firstAlarm";
         String alarmName = "alarmName";
         String level = "level";
+        String fireInvoke = "fireInvoke";
         String ownerId = "ownerId";
         String description = "description";
         String state = "state";

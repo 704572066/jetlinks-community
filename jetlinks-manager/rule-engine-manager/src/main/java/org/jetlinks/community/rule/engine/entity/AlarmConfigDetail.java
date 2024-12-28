@@ -34,6 +34,9 @@ public class AlarmConfigDetail {
     @Schema(description = "告警级别")
     private Integer level;
 
+    @Schema(description = "app告警消息是否显示灭火操作")
+    private Boolean fireInvoke;
+
     @Schema(description = "关联场景")
     private List<SceneInfo> scene;
 

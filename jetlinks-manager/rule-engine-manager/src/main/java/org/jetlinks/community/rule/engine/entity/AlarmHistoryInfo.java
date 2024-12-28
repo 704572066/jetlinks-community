@@ -31,6 +31,9 @@ public class AlarmHistoryInfo implements Serializable {
     @Schema(description = "告警级别")
     private int level;
 
+    @Schema(description = "app告警消息显示灭火操作")
+    private Boolean fireInvoke;
+
     @Schema(description = "说明")
     private String description;
 
@@ -91,6 +94,7 @@ public class AlarmHistoryInfo implements Serializable {
         info.setAlarmConfigName(alarmConfig.getName());
         info.setAlarmRecordId(alarmRecordId);
         info.setLevel(alarmConfig.getLevel());
+        info.setFireInvoke(alarmConfig.getFireInvoke());
         info.setId(data.getId());
         info.setAlarmTime(System.currentTimeMillis());
 

@@ -43,6 +43,11 @@ public class AlarmConfigEntity extends GenericEntity<String> implements RecordCr
     @Schema(description = "告警级别")
     private Integer level;
 
+    @Column
+    @Schema(description = "app告警消息是否显示灭火操作")
+    @DefaultValue("false")
+    private Boolean fireInvoke;
+
     @Column(length = 128)
     @Schema(description = "关联场景名称")
     @Deprecated
@@ -113,6 +118,7 @@ public class AlarmConfigEntity extends GenericEntity<String> implements RecordCr
         configs.put(AlarmConstants.ConfigKey.alarmConfigId, getId());
         configs.put(AlarmConstants.ConfigKey.alarmName, getName());
         configs.put(AlarmConstants.ConfigKey.level, getLevel());
+        configs.put(AlarmConstants.ConfigKey.fireInvoke, getFireInvoke());
         configs.put(AlarmConstants.ConfigKey.ownerId, getModifierId() == null ? getCreatorId() : getModifierId());
         configs.put(AlarmConstants.ConfigKey.targetType, getTargetType());
         configs.put(AlarmConstants.ConfigKey.state, getState().name());
