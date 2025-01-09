@@ -341,6 +341,7 @@ public class DefaultAlarmHandler implements AlarmHandler {
         info.setDescription(record.getDescription());
         info.setAlarmRecordId(record.getId());
         info.setLevel(record.getLevel());
+        info.setFireInvoke(record.getFireInvoke());
 //        info.set(record.getLevel());
         info.setAlarmTime(System.currentTimeMillis());
         info.setTriggerDesc(record.getTriggerDesc());

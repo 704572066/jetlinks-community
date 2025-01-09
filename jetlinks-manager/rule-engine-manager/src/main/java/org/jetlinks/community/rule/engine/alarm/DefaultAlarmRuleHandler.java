@@ -59,6 +59,7 @@ public class DefaultAlarmRuleHandler implements AlarmRuleHandler, CommandLineRun
             AlarmConstants.ConfigKey.alarmConfigId,
             AlarmConstants.ConfigKey.alarmName,
             AlarmConstants.ConfigKey.level,
+            AlarmConstants.ConfigKey.fireInvoke,
             AlarmConstants.ConfigKey.targetType,
             AlarmConstants.ConfigKey.state,
             AlarmConstants.ConfigKey.ownerId,

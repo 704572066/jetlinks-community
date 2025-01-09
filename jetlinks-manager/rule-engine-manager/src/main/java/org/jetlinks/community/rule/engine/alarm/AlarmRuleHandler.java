@@ -67,6 +67,9 @@ public interface AlarmRuleHandler {
         @Schema(description = "告警级别")
         private int level;
 
+        @Schema(description = "app告警是否显示灭火操作")
+        private Boolean fireInvoke;
+
         @Schema(description = "上一次告警时间")
         private long lastAlarmTime;
 
@@ -118,6 +121,7 @@ public interface AlarmRuleHandler {
             map.put(ConfigKey.alarming, alarming);
             map.put(ConfigKey.firstAlarm, firstAlarm);
             map.put(ConfigKey.level, level);
+            map.put(ConfigKey.fireInvoke, fireInvoke);
             map.put(ConfigKey.alarmTime, alarmTime);
             map.put(ConfigKey.lastAlarmTime, lastAlarmTime);
 

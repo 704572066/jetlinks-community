@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -26,6 +27,7 @@ import javax.annotation.PostConstruct;
 @EnableEasyormRepository("org.jetlinks.community.**.entity")
 @EnableAopAuthorize
 @EnableAccessLogger
+@EnableScheduling
 @Slf4j
 public class JetLinksApplication {
 

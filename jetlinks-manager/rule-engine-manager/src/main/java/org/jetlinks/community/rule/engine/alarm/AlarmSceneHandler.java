@@ -159,7 +159,9 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
                                 if (StringUtils.hasText(before.getName()) &&
                                     before.getName().equals(config.getName()) &&
                                     before.getLevel() != null &&
-                                    before.getLevel().equals(config.getLevel())) {
+                                    before.getLevel().equals(config.getLevel()) &&
+                                    before.getFireInvoke() != null &&
+                                    before.getFireInvoke().equals(config.getFireInvoke())) {
                                     return false;
                                 }
                             }
@@ -280,6 +282,7 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
             .createUpdate()
             .set(AlarmRecordEntity::getAlarmName, config.getName())
             .set(AlarmRecordEntity::getLevel, config.getLevel())
+            .set(AlarmRecordEntity::getFireInvoke, config.getFireInvoke())
             .where(AlarmRecordEntity::getAlarmConfigId, config.getId())
             .execute();
     }

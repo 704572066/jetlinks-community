@@ -143,6 +143,12 @@
 
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>video-manager</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>notify-manager</artifactId>
             <version>${project.version}</version>
         </dependency>
