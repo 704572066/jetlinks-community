@@ -10,6 +10,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.hswebframework.ezorm.rdb.exception.DuplicateKeyException;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
+import org.hswebframework.ezorm.rdb.operator.dml.query.SortOrder;
 import org.hswebframework.reactor.excel.ReactorExcel;
 import org.hswebframework.web.api.crud.entity.PagerResult;
 import org.hswebframework.web.api.crud.entity.QueryNoPagingOperation;
@@ -86,10 +87,7 @@ import reactor.util.function.Tuples;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -180,9 +178,34 @@ public class DeviceInstanceController implements
         return properties.flatMap(props -> service.readProperties(deviceId, props));
     }
 
+    // 按照 category 分组并统计每个组的数量
+    @GetMapping("/{orgId:.+}/address-category")
+    @QueryAction
+    @Operation(summary = "获取设备地址分类")
+    public Flux<Map<String, Object>> groupByCategory(@PathVariable @Parameter(description = "组织ID") String orgId) {
+        return service.createQuery().where(DeviceInstanceEntity::getOrgId,orgId).fetch()
+                                                                                             .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+                                                                                             .flatMap(group -> group.count()  // 统计每个组的数量
+                                             .map(
+                                                 count -> {
+//                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+                                                     Map<String, Object> result = new HashMap<>();
+                                                     result.put("key", group.key()); // Set the group key
+                                                     result.put("value", count);     // Set the group count
+                                                     return result;
+                                                 }
+                                             )
+                      )  // 将分组的 key 和 count 转换为 Entry
+                                                                                             .collectList()  // 收集到 List 中
+                      .map(list -> {
+                          // Sort the list based on "key" (deviceAddress)
+                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+                          return list;
+                      })
+                                                                                             .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
+    }
 
-
-    //获取设备详情
+        //获取设备详情
     @GetMapping("/{id:.+}/config-metadata")
     @QueryAction
     @Operation(summary = "获取设备需要的配置定义信息")

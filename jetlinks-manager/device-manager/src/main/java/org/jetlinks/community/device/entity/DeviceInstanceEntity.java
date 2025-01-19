@@ -64,6 +64,17 @@ public class DeviceInstanceEntity extends GenericEntity<String> implements Recor
     @Schema(description = "设备名称")
     private String name;
 
+    @Column(name = "device_address")
+//    @NotBlank(message = "设备名称不能为空", groups = CreateGroup.class)
+    @Schema(description = "设备地址 用于app端分类")
+    private String deviceAddress;
+
+    @Column(name = "geo_point")
+//    @NotBlank(message = "设备名称不能为空", groups = CreateGroup.class)
+    @Schema(description = "设备经纬度")
+    private String geoPoint;
+
+
     @Column
     @ColumnType(javaType = String.class)
     @EnumCodec
