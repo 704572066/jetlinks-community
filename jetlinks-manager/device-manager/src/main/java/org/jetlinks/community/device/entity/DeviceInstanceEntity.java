@@ -91,6 +91,11 @@ public class DeviceInstanceEntity extends GenericEntity<String> implements Recor
     @Schema(description = "产品ID")
     private String productId;
 
+    @Column(name = "video_id", length = 64)
+    @Schema(description = "监控设备ID")
+    private String videoId;
+
+
     @Column(name = "product_name")
     @NotBlank(message = "产品名称不能为空", groups = CreateGroup.class)
     @Schema(description = "产品名称")

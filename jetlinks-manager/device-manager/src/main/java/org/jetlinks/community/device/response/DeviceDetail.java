@@ -43,6 +43,10 @@ public class DeviceDetail {
     @Schema(description = "图片地址")
     private String photoUrl;
 
+    //设备关联的摄像头
+    @Schema(description = "设备关联的摄像头")
+    private String videoId;
+
     //消息协议标识
     @Schema(description = "消息协议ID")
     private String protocol;
@@ -314,6 +318,7 @@ public class DeviceDetail {
     public DeviceDetail with(DeviceInstanceEntity device) {
 
         setId(device.getId());
+        setVideoId(device.getVideoId());
         setName(device.getName());
         setState(device.getState());
         setParentId(device.getParentId());
