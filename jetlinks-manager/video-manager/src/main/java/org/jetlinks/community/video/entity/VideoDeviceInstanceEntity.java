@@ -32,8 +32,10 @@ public class VideoDeviceInstanceEntity extends GenericEntity<String> implements 
     @Override
     @GeneratedValue(generator = Generators.SNOW_FLAKE)
     @Pattern(
-        regexp = "^[0-9a-zA-Z_\\-]+$",
-        message = "ID只能由数字,字母,下划线和中划线组成",
+//        regexp = "^[0-9a-zA-Z_\\-]+$",
+//        message = "ID只能由数字,字母,下划线和中划线组成",
+        regexp = "^[0-9a-zA-Z_\\-:]+$",
+        message = "ID只能由数字、字母、下划线、中划线和冒号组成",
         groups = CreateGroup.class)
     @Schema(description = "ID")
     public String getId() {
