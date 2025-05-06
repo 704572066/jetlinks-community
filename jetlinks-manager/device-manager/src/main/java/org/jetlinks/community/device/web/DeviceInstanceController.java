@@ -1,5 +1,14 @@
 package org.jetlinks.community.device.web;
 
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
+//import co.elastic.clients.elasticsearch._types.aggregations.AggregationBuilders;
+import co.elastic.clients.elasticsearch._types.aggregations.TermsAggregation;
+import co.elastic.clients.elasticsearch._types.aggregations.TopHitsAggregation;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.ExistsQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.transport.rest_client.RestClientTransport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -7,10 +16,24 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.http.HttpHost;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.ElasticsearchClient;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.query.*;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.TopHitsAggregationBuilder;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.sort.SortOrder;
 import org.hswebframework.ezorm.rdb.exception.DuplicateKeyException;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.ezorm.rdb.mapping.defaults.SaveResult;
-import org.hswebframework.ezorm.rdb.operator.dml.query.SortOrder;
+//import org.hswebframework.ezorm.rdb.operator.dml.query.SortOrder;
 import org.hswebframework.reactor.excel.ReactorExcel;
 import org.hswebframework.web.api.crud.entity.PagerResult;
 import org.hswebframework.web.api.crud.entity.QueryNoPagingOperation;
@@ -45,6 +68,7 @@ import org.jetlinks.community.device.web.excel.PropertyMetadataExcelInfo;
 import org.jetlinks.community.device.web.excel.PropertyMetadataWrapper;
 import org.jetlinks.community.device.web.excel.*;
 import org.jetlinks.community.device.web.request.AggRequest;
+import org.jetlinks.community.device.web.response.DeviceGeoPoint;
 import org.jetlinks.community.io.excel.AbstractImporter;
 import org.jetlinks.community.io.excel.ImportExportService;
 import org.jetlinks.community.io.file.FileManager;
@@ -71,6 +95,7 @@ import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.util.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.StringUtils;
@@ -92,6 +117,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.hswebframework.reactor.excel.ReactorExcel.read;
+import static org.jetlinks.community.device.web.utils.GeoPointParser.parseGeoPoints;
 
 @RestController
 @RequestMapping({"/device-instance", "/device/instance"})
@@ -128,6 +154,10 @@ public class DeviceInstanceController implements
     private final DeviceExcelFilterColumns filterColumns;
 
     private final DefaultPropertyMetricManager metricManager;
+
+    private final RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
+        new HttpHost("121.41.12.199", 9200, "http") // change to your ES host/port
+    ));
 
     @SuppressWarnings("all")
     public DeviceInstanceController(LocalDeviceInstanceService service,
@@ -381,6 +411,58 @@ public class DeviceInstanceController implements
                                                                    @PathVariable @Parameter(description = "属性ID") String property,
                                                                    @RequestBody Mono<QueryParamEntity> queryParam) {
         return queryParam.flatMap(param -> deviceDataService.queryPropertyPage(deviceId, param, property.split(",")));
+    }
+
+    @GetMapping("/{orgId:.+}/geo/_query")
+    @QueryAction
+    @Operation(summary = "查询设备最新地理位置列表")
+    public Mono<List<DeviceGeoPoint>> queryDeviceGeo(
+        @PathVariable @Parameter(description = "组织ID") String orgId
+    ) {
+        return service.createQuery()
+                      .where(DeviceInstanceEntity::getOrgId, orgId)
+                      .fetch()
+                      .collectList()
+                      .flatMap(devices -> {
+                          List<String> deviceIds = devices.stream()
+                                                          .map(DeviceInstanceEntity::getId)
+                                                          .collect(Collectors.toList());
+                          Map<String, String> deviceNameMap = devices.stream()
+                                                                     .collect(Collectors.toMap(DeviceInstanceEntity::getId, DeviceInstanceEntity::getName));
+
+                          if (deviceIds.isEmpty()) {
+                              return Mono.just(Collections.emptyList());
+                          }
+
+                          BoolQueryBuilder boolQuery = new BoolQueryBuilder()
+                              .must(new TermsQueryBuilder("deviceId", deviceIds))
+                              .must(new ExistsQueryBuilder("geoValue"));
+
+                          TopHitsAggregationBuilder topHitsAgg = AggregationBuilders
+                              .topHits("latest_point")
+                              .sort("timestamp", SortOrder.DESC)
+                              .size(1)
+                              .fetchSource(new FetchSourceContext(true, new String[]{"deviceId", "geoValue", "timestamp"}, null));
+
+                          TermsAggregationBuilder termsAgg = AggregationBuilders
+                              .terms("each_device")
+                              .field("deviceId")
+                              .size(deviceIds.size())
+                              .subAggregation(topHitsAgg);
+
+                          SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                              .query(boolQuery)
+                              .aggregation(termsAgg)
+                              .size(0);
+
+                          SearchRequest searchRequest = new SearchRequest("properties_*")
+                              .source(sourceBuilder);
+
+                          return Mono.fromCallable(() -> client.search(searchRequest, RequestOptions.DEFAULT))
+                                     .subscribeOn(Schedulers.boundedElastic())
+                                     .map(response -> parseGeoPoints(response, deviceNameMap));
+//                                     .map(ResponseEntity::ok);
+                      });
     }
 
     @PostMapping("/{deviceId:.+}/property/{property}/_query/no-paging")
@@ -1164,4 +1246,5 @@ public class DeviceInstanceController implements
         return metricManager
             .getPropertyMetrics(DeviceThingType.device.getId(), deviceId, property);
     }
+
 }
