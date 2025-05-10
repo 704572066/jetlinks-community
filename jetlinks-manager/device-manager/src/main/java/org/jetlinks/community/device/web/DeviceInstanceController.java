@@ -413,9 +413,9 @@ public class DeviceInstanceController implements
         return queryParam.flatMap(param -> deviceDataService.queryPropertyPage(deviceId, param, property.split(",")));
     }
 
-    @GetMapping("/{orgId:.+}/geo/_query")
+    @GetMapping("/{orgId:.+}/multi/geo/_query")
     @QueryAction
-    @Operation(summary = "查询设备最新地理位置列表")
+    @Operation(summary = "根据组织id查询设备最新地理位置列表")
     public Mono<List<DeviceGeoPoint>> queryDeviceGeo(
         @PathVariable @Parameter(description = "组织ID") String orgId
     ) {
@@ -463,6 +463,54 @@ public class DeviceInstanceController implements
                                      .map(response -> parseGeoPoints(response, deviceNameMap));
 //                                     .map(ResponseEntity::ok);
                       });
+    }
+
+    @GetMapping("/{deviceId:.+}/geo/_query")
+    @QueryAction
+    @Operation(summary = "根据设备id查询设备最新地理位置列表")
+    public Mono<List<DeviceGeoPoint>> queryDeviceGeoByDeviceId(
+        @PathVariable @Parameter(description = "组织ID") String deviceId
+    ) {
+        return service.createQuery()
+                      .where(DeviceInstanceEntity::getId, deviceId)
+                      .fetch()
+                      .singleOrEmpty()
+                      .flatMap(device -> {
+                          List<String> deviceIds = new ArrayList<>();
+                          deviceIds.add(deviceId);
+                          String name = device.getName();
+                          BoolQueryBuilder boolQuery = new BoolQueryBuilder()
+                              .must(new TermsQueryBuilder("deviceId", deviceIds))
+                              .must(new ExistsQueryBuilder("geoValue"));
+
+                          TopHitsAggregationBuilder topHitsAgg = AggregationBuilders
+                              .topHits("latest_point")
+                              .sort("timestamp", SortOrder.DESC)
+                              .size(1)
+                              .fetchSource(new FetchSourceContext(true, new String[]{"deviceId", "geoValue", "timestamp"}, null));
+
+                          TermsAggregationBuilder termsAgg = AggregationBuilders
+                              .terms("each_device")
+                              .field("deviceId")
+                              .size(1)
+                              .subAggregation(topHitsAgg);
+
+                          SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                              .query(boolQuery)
+                              .aggregation(termsAgg)
+                              .size(0);
+
+                          SearchRequest searchRequest = new SearchRequest("properties_"+device.getProductId()+"_*")
+                              .source(sourceBuilder);
+
+                          return Mono.fromCallable(() -> client.search(searchRequest, RequestOptions.DEFAULT))
+                                     .subscribeOn(Schedulers.boundedElastic())
+                                     .map(response -> {
+                                         return parseGeoPoints(response, Collections.singletonMap(deviceId, name));
+//                                         return points.isEmpty() ? null : points.get(0);
+                                     }).onErrorReturn(Collections.emptyList());
+//                                     .map(ResponseEntity::ok);
+                      }).switchIfEmpty(Mono.just(Collections.emptyList()));
     }
 
     @PostMapping("/{deviceId:.+}/property/{property}/_query/no-paging")
