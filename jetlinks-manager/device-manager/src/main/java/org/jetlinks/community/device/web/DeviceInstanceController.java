@@ -156,7 +156,7 @@ public class DeviceInstanceController implements
     private final DefaultPropertyMetricManager metricManager;
 
     private final RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
-        new HttpHost("121.41.12.199", 9200, "http") // change to your ES host/port
+        new HttpHost("172.18.0.1", 9200, "http") // change to your ES host/port
     ));
 
     @SuppressWarnings("all")
