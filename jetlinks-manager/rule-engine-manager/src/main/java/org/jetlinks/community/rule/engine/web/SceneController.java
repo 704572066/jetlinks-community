@@ -58,6 +58,18 @@ public class SceneController implements ReactiveServiceQueryController<SceneEnti
             .then();
     }
 
+    @PutMapping("/copy/{id}")
+    @Operation(summary = "复制场景")
+    @SaveAction
+    public Mono<SceneEntity> copy(@PathVariable String id) {
+//        return sceneRuleMono
+//            .flatMap(service::createScene);
+//        return sceneRuleMono
+//            .flatMap(sceneRule -> service.findById(id))
+//            .then();
+        return service.copyScene(id);
+    }
+
     @PutMapping("/{id}/_disable")
     @Operation(summary = "禁用场景")
     @SaveAction

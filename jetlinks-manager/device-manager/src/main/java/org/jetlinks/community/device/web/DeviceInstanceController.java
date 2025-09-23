@@ -235,6 +235,33 @@ public class DeviceInstanceController implements
                                                                                              .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
     }
 
+    // 按照 category 分组并统计每个组的数量,admin显示所有设备
+    @GetMapping("/admin/address-category")
+    @QueryAction
+    @Operation(summary = "获取设备地址分类")
+    public Flux<Map<String, Object>> adminGroupByCategory() {
+        return service.createQuery().fetch()
+                      .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+                      .flatMap(group -> group.count()  // 统计每个组的数量
+                                             .map(
+                                                 count -> {
+//                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+                                                     Map<String, Object> result = new HashMap<>();
+                                                     result.put("key", group.key()); // Set the group key
+                                                     result.put("value", count);     // Set the group count
+                                                     return result;
+                                                 }
+                                             )
+                      )  // 将分组的 key 和 count 转换为 Entry
+                      .collectList()  // 收集到 List 中
+                      .map(list -> {
+                          // Sort the list based on "key" (deviceAddress)
+                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+                          return list;
+                      })
+                      .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
+    }
+
         //获取设备详情
     @GetMapping("/{id:.+}/config-metadata")
     @QueryAction

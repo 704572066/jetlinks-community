@@ -27,14 +27,14 @@ public class WeChatPushService {
 //        this.localDeviceInstanceService = new LocalDeviceInstanceService();
     }
 
-    public Mono<Void> sendPostRequest(String openId, String alarmTime, String targetName, String sourceId, String alarmName) {
+    public Mono<Void> sendPostRequest(String openId, String alarmTime, String sourceName, String sourceId, String alarmName) {
 
         Map<String, String> data = new HashMap<>();
         data.put("first", "设备告警通知");
         data.put("time3", alarmTime);
         data.put("character_string11", sourceId);
         data.put("thing33", alarmName);
-        data.put("thing23", targetName);
+        data.put("thing23", sourceName);
         data.put("remark", "点击查看详情");
 //        Map<String, String> miniprogram = new HashMap<>();
 //        miniprogram.put("appid", "wxe861fc6383450e16");

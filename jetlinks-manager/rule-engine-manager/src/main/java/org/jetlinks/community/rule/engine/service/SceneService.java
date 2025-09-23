@@ -79,6 +79,27 @@ public class SceneService extends GenericReactiveCrudService<SceneEntity, String
     }
 
     @Transactional(rollbackFor = Throwable.class)
+    public Mono<SceneEntity> copyScene(String id) {
+//        if (!StringUtils.hasText(rule.getId())) {
+//            rule.setId(IDGenerator.SNOW_FLAKE_STRING.generate());
+//        }
+//        rule.validate();
+//        SceneEntity entity = new SceneEntity().with(rule);
+//        entity.setState(RuleInstanceState.disable);
+        return this.findById(id).flatMap(sceneEntity -> {
+            sceneEntity.setId(IDGenerator.SNOW_FLAKE_STRING.generate());
+            sceneEntity.setName(sceneEntity.getName()+"_copy");
+            return this
+                .insert(sceneEntity)
+                .thenReturn(sceneEntity);
+        });
+
+//        return this
+//            .insert(entity)
+//            .thenReturn(entity);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
     public Mono<SceneEntity> updateScene(String id, SceneRule rule) {
         rule.setId(id);
         rule.validate();

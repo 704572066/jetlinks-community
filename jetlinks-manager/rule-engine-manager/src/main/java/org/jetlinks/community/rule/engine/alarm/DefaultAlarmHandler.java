@@ -171,17 +171,15 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                                                                                              .collect(Collectors
                                                                                                                           .toList()); // Collect the result into a new list
 //                                                                            log.warn("cid: "+entity.getCid());
-                                                                            if (!cidList.isEmpty()) {
-//                                                                                List<String> cidList = new ArrayList<>();
-//                                                                                cidList.add(entity.getCid());
-                                                                                return uniPushService.sendPostRequest(
-                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
-                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
-                                                                                    "设备告警 " + alarmTime,
-                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
-                                                                                    "warning")
-                                                                                                     .then(Mono.just(entityList));  // Ensure the entity continues down the flow
-                                                                            }
+//                                                                            if (!cidList.isEmpty()) {
+//                                                                                return uniPushService.sendPostRequest(
+//                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
+//                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
+//                                                                                    "设备告警 " + alarmTime,
+//                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
+//                                                                                    "warning")
+//                                                                                                     .then(Mono.just(entityList));  // Ensure the entity continues down the flow
+//                                                                            }
                                                                             return Mono.just(entityList);  // If no CID to send, just return entity
                                                                         })
                                                                         .flatMap(entityList -> {
@@ -203,7 +201,7 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                                                                                                        return weChatPushService.sendPostRequest(
                                                                                                                            openid,
                                                                                                                            alarmTime,
-                                                                                                                           alarmInfo.getTargetName(),
+                                                                                                                           alarmInfo.getSourceName(),
                                                                                                                            alarmInfo.getSourceId(),
                                                                                                                            alarmInfo.getAlarmName()
                                                                                                                        ).onErrorResume(e -> {
