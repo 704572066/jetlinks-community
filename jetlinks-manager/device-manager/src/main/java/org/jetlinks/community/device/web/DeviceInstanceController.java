@@ -235,6 +235,33 @@ public class DeviceInstanceController implements
                                                                                              .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
     }
 
+    // 查询多个组织id下的所有设备
+    @PostMapping("/address-category")
+    @QueryAction
+    @Operation(summary = "获取多个组织的设备地址分类")
+    public Flux<Map<String, Object>> groupByCategory(@RequestBody @Parameter(description = "组织ID列表") List<String> orgIds) {
+        return service.createQuery().where().in(DeviceInstanceEntity::getOrgId,orgIds).fetch()
+                      .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+                      .flatMap(group -> group.count()  // 统计每个组的数量
+                                             .map(
+                                                 count -> {
+//                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+                                                     Map<String, Object> result = new HashMap<>();
+                                                     result.put("key", group.key()); // Set the group key
+                                                     result.put("value", count);     // Set the group count
+                                                     return result;
+                                                 }
+                                             )
+                      )  // 将分组的 key 和 count 转换为 Entry
+                      .collectList()  // 收集到 List 中
+                      .map(list -> {
+                          // Sort the list based on "key" (deviceAddress)
+                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+                          return list;
+                      })
+                      .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
+    }
+
     // 按照 category 分组并统计每个组的数量,admin显示所有设备
     @GetMapping("/admin/address-category")
     @QueryAction
@@ -448,6 +475,55 @@ public class DeviceInstanceController implements
     ) {
         return service.createQuery()
                       .where(DeviceInstanceEntity::getOrgId, orgId)
+                      .fetch()
+                      .collectList()
+                      .flatMap(devices -> {
+                          List<String> deviceIds = devices.stream()
+                                                          .map(DeviceInstanceEntity::getId)
+                                                          .collect(Collectors.toList());
+                          Map<String, String> deviceNameMap = devices.stream()
+                                                                     .collect(Collectors.toMap(DeviceInstanceEntity::getId, DeviceInstanceEntity::getName));
+
+                          if (deviceIds.isEmpty()) {
+                              return Mono.just(Collections.emptyList());
+                          }
+
+                          BoolQueryBuilder boolQuery = new BoolQueryBuilder()
+                              .must(new TermsQueryBuilder("deviceId", deviceIds))
+                              .must(new ExistsQueryBuilder("geoValue"));
+
+                          TopHitsAggregationBuilder topHitsAgg = AggregationBuilders
+                              .topHits("latest_point")
+                              .sort("timestamp", SortOrder.DESC)
+                              .size(1)
+                              .fetchSource(new FetchSourceContext(true, new String[]{"deviceId", "geoValue", "timestamp"}, null));
+
+                          TermsAggregationBuilder termsAgg = AggregationBuilders
+                              .terms("each_device")
+                              .field("deviceId")
+                              .size(deviceIds.size())
+                              .subAggregation(topHitsAgg);
+
+                          SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                              .query(boolQuery)
+                              .aggregation(termsAgg)
+                              .size(0);
+
+                          SearchRequest searchRequest = new SearchRequest("properties_*")
+                              .source(sourceBuilder);
+
+                          return Mono.fromCallable(() -> client.search(searchRequest, RequestOptions.DEFAULT))
+                                     .subscribeOn(Schedulers.boundedElastic())
+                                     .map(response -> parseGeoPoints(response, deviceNameMap));
+//                                     .map(ResponseEntity::ok);
+                      });
+    }
+
+    @PostMapping("/multi-org/geo/_query")
+    @QueryAction
+    @Operation(summary = "根据多组织id查询设备最新地理位置列表")
+    public Mono<List<DeviceGeoPoint>> queryDeviceGeo(@RequestBody @Parameter(description = "组织ID列表") List<String> orgIds) {
+        return service.createQuery().where().in(DeviceInstanceEntity::getOrgId,orgIds)
                       .fetch()
                       .collectList()
                       .flatMap(devices -> {

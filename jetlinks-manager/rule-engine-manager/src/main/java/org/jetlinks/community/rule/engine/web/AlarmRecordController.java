@@ -25,9 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -95,6 +93,39 @@ public class AlarmRecordController implements ReactiveServiceQueryController<Ala
     }
 
     //原生SQL方式
+    @PostMapping("/multi-org/_query_native")
+    @Operation(summary = "根据用户所属多个组织查询告警记录")
+    @QueryAction
+    public Mono<PagerResult<AlarmRecordEntity>> nativeJoin(@RequestBody Mono<QueryParamEntity> queryParam) {
+        return queryParam.flatMap(param -> {
+//            param.getTerms().stream().findFirst();
+            // 使用stream获取orgId的value
+            List<String> orgIds = param.getTerms().stream()
+                                       .filter(term -> "orgId".equals(term.getColumn()))
+                                       .flatMap(term -> ((List<String>) term.getValue()).stream())  // 直接强转 ArrayList<String>
+                                       .collect(Collectors.toList());
+            if (orgIds.isEmpty()) {
+                return Mono.just(PagerResult.of(0, Collections.emptyList())); // 或者直接 return
+            }
+            String ids = orgIds.stream()
+                               .map(id -> "'" + id + "'")
+                               .collect(Collectors.joining(","));
+//
+            //得到orgid后terms再次过滤掉,防止在where(param)中报错
+            param.setTerms(param.getTerms().stream()
+                                .filter(term -> !"orgId".equals(term.getColumn())).collect(Collectors.toList()) );
+
+            return queryHelper
+                .select("select ar.* from alarm_record ar" +
+                            " inner join (SELECT id FROM dev_device_instance where org_id in ("+ids+")) device on ar.source_id = device.id",
+                        AlarmRecordEntity::new)
+                //根据前端的动态条件参数自动构造查询条件以及分页排序等信息
+                .where(param)
+                .fetchPaged();
+        });
+    }
+
+    //原生SQL方式
     @PostMapping("/handle-history/_query_native")
     @Operation(summary = "根据用户所属组织查询所有告警处理记录")
     @QueryAction
@@ -114,6 +145,38 @@ public class AlarmRecordController implements ReactiveServiceQueryController<Ala
 
             return queryHelper
                 .select("select his.alarm_time, dev.alarm_name, dev.target_name, dev.state, dev.source_id from alarm_handle_history his INNER JOIN (select ar.* from alarm_record ar inner join (SELECT id FROM dev_device_instance where org_id in ('"+ids+"')) device on ar.source_id = device.id) dev on his.alarm_record_id = dev.id order by alarm_time desc",
+                        AlarmRecordEntity::new)
+                //根据前端的动态条件参数自动构造查询条件以及分页排序等信息
+                .where(param)
+                .fetchPaged();
+        });
+    }
+
+    //原生SQL方式
+    @PostMapping("/multi-org/handle-history/_query_native")
+    @Operation(summary = "根据用户所属多个组织查询所有告警处理记录")
+    @QueryAction
+    public Mono<PagerResult<AlarmRecordEntity>> getHandleHistoryByOrgIds(@RequestBody Mono<QueryParamEntity> queryParam) {
+        return queryParam.flatMap(param -> {
+//            param.getTerms().stream().findFirst();
+            // 使用stream获取orgId的value
+            List<String> orgIds = param.getTerms().stream()
+                                       .filter(term -> "orgId".equals(term.getColumn()))
+                                       .flatMap(term -> ((List<String>) term.getValue()).stream())  // 直接强转 ArrayList<String>
+                                       .collect(Collectors.toList());
+            if (orgIds.isEmpty()) {
+                return Mono.just(PagerResult.of(0, Collections.emptyList())); // 或者直接 return
+            }
+            String ids = orgIds.stream()
+                                    .map(id -> "'" + id + "'")
+                                    .collect(Collectors.joining(","));
+//            String ids = (String) orgIds.orElse("");
+            //得到orgid后terms再次过滤掉,防止在where(param)中报错
+            param.setTerms(param.getTerms().stream()
+                                .filter(term -> !"orgId".equals(term.getColumn())).collect(Collectors.toList()) );
+
+            return queryHelper
+                .select("select his.alarm_time, dev.alarm_name, dev.target_name, dev.state, dev.source_id from alarm_handle_history his INNER JOIN (select ar.* from alarm_record ar inner join (SELECT id FROM dev_device_instance where org_id in ("+ids+")) device on ar.source_id = device.id) dev on his.alarm_record_id = dev.id order by alarm_time desc",
                         AlarmRecordEntity::new)
                 //根据前端的动态条件参数自动构造查询条件以及分页排序等信息
                 .where(param)
