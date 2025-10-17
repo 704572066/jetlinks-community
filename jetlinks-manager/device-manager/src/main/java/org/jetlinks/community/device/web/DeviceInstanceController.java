@@ -1,14 +1,6 @@
 package org.jetlinks.community.device.web;
 
-import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
 //import co.elastic.clients.elasticsearch._types.aggregations.AggregationBuilders;
-import co.elastic.clients.elasticsearch._types.aggregations.TermsAggregation;
-import co.elastic.clients.elasticsearch._types.aggregations.TopHitsAggregation;
-import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.ExistsQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,9 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.ElasticsearchClient;
-import org.elasticsearch.client.RequestOptions;
+    import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.*;
@@ -43,6 +33,7 @@ import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Dimension;
 import org.hswebframework.web.authorization.annotation.*;
 import org.hswebframework.web.bean.FastBeanCopier;
+import org.hswebframework.web.crud.query.QueryHelper;
 import org.hswebframework.web.crud.web.reactive.ReactiveServiceCrudController;
 import org.hswebframework.web.exception.BusinessException;
 import org.hswebframework.web.exception.NotFoundException;
@@ -95,8 +86,7 @@ import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.util.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.reactive.ServerHttpResponse;
+    import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -155,6 +145,8 @@ public class DeviceInstanceController implements
 
     private final DefaultPropertyMetricManager metricManager;
 
+    private final QueryHelper queryHelper;
+
     private final RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
         new HttpHost("172.18.0.1", 9200, "http") // change to your ES host/port
     ));
@@ -172,7 +164,7 @@ public class DeviceInstanceController implements
                                     FileManager fileManager,
                                     WebClient.Builder builder,
                                     DeviceExcelFilterColumns filterColumns,
-                                    DefaultPropertyMetricManager metricManager) {
+                                    DefaultPropertyMetricManager metricManager, QueryHelper queryHelper) {
         this.service = service;
         this.registry = registry;
         this.productService = productService;
@@ -186,6 +178,7 @@ public class DeviceInstanceController implements
         this.webClient = builder.build();
         this.filterColumns = filterColumns;
         this.metricManager = metricManager;
+        this.queryHelper = queryHelper;
     }
 
 
@@ -1397,5 +1390,44 @@ public class DeviceInstanceController implements
         return metricManager
             .getPropertyMetrics(DeviceThingType.device.getId(), deviceId, property);
     }
+
+
+    @PostMapping("/group-org/_query_native")
+    @Operation(summary = "根据用户所属多个组织查询每个组织名称和对应设备数量")
+    @QueryAction
+    public Mono<PagerResult<DeviceCompany>> GroupByOrg(@RequestBody Mono<QueryParamEntity> queryParam) {
+
+
+        return queryParam.flatMap(param -> {
+
+            List<String> orgIds = param.getTerms().stream()
+                                       .filter(term -> "orgId".equals(term.getColumn()))
+                                       .flatMap(term -> ((List<String>) term.getValue()).stream())  // 直接强转 ArrayList<String>
+                                       .collect(Collectors.toList());
+            if (orgIds.isEmpty()) {
+                return Mono.just(PagerResult.of(0, Collections.emptyList())); // 或者直接 return
+            }
+            String ids = orgIds.stream()
+                               .map(id -> "'" + id + "'")
+                               .collect(Collectors.joining(","));
+//
+            //得到orgid后terms再次过滤掉,防止在where(param)中报错
+            param.setTerms(param.getTerms().stream()
+                                .filter(term -> !"orgId".equals(term.getColumn())).collect(Collectors.toList()) );
+            String sql = "SELECT o.id AS orgId, o.name AS orgName, COUNT(d.id) AS deviceNum FROM s_organization o LEFT JOIN dev_device_instance d ON d.org_id = o.id WHERE o.id in ("+ids+") GROUP BY o.id, o.name ORDER BY o.name";
+
+            // 移除 orgId 条件，防止 where(param) 重复
+            param.setTerms(param.getTerms().stream()
+                                .filter(term -> !"orgId".equals(term.getColumn()))
+                                .collect(Collectors.toList()));
+
+            // 查询并映射为 DeviceCompany
+            return queryHelper
+                .select(sql, DeviceCompany::new)
+                .where(param)
+                .fetchPaged();
+        });
+    }
+
 
 }
