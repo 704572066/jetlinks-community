@@ -9,6 +9,7 @@ public interface AlarmConstants {
         String alarmName = "alarmName";
         String level = "level";
         String fireInvoke = "fireInvoke";
+        String wxPush = "wxPush";
         String ownerId = "ownerId";
         String description = "description";
         String state = "state";

@@ -70,6 +70,9 @@ public interface AlarmRuleHandler {
         @Schema(description = "app告警是否显示灭火操作")
         private Boolean fireInvoke;
 
+        @Schema(description = "是否向微信公众号推送告警信息")
+        private Boolean wxPush;
+
         @Schema(description = "上一次告警时间")
         private long lastAlarmTime;
 
@@ -122,6 +125,7 @@ public interface AlarmRuleHandler {
             map.put(ConfigKey.firstAlarm, firstAlarm);
             map.put(ConfigKey.level, level);
             map.put(ConfigKey.fireInvoke, fireInvoke);
+            map.put(ConfigKey.wxPush, wxPush);
             map.put(ConfigKey.alarmTime, alarmTime);
             map.put(ConfigKey.lastAlarmTime, lastAlarmTime);
 

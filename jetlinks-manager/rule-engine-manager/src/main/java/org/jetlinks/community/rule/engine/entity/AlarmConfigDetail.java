@@ -37,6 +37,9 @@ public class AlarmConfigDetail {
     @Schema(description = "app告警消息是否显示灭火操作")
     private Boolean fireInvoke;
 
+    @Schema(description = "是否向微信公众号推送告警信息")
+    private Boolean wxPush;
+
     @Schema(description = "关联场景")
     private List<SceneInfo> scene;
 

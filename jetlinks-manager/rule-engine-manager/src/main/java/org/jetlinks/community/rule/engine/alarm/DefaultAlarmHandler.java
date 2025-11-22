@@ -311,6 +311,7 @@ public class DefaultAlarmHandler implements AlarmHandler {
         entity.setState(AlarmRecordState.warning);
         entity.setLevel(alarmData.getLevel());
         entity.setFireInvoke(alarmData.getFireInvoke());
+        entity.setWxPush(alarmData.getWxPush());
         entity.setTargetType(alarmData.getTargetType());
         entity.setTargetName(alarmData.getTargetName());
         entity.setTargetId(alarmData.getTargetId());
@@ -340,6 +341,7 @@ public class DefaultAlarmHandler implements AlarmHandler {
         info.setAlarmRecordId(record.getId());
         info.setLevel(record.getLevel());
         info.setFireInvoke(record.getFireInvoke());
+        info.setWxPush(record.getWxPush());
 //        info.set(record.getLevel());
         info.setAlarmTime(System.currentTimeMillis());
         info.setTriggerDesc(record.getTriggerDesc());

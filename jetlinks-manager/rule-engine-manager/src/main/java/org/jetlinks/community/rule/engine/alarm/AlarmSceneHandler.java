@@ -161,7 +161,9 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
                                     before.getLevel() != null &&
                                     before.getLevel().equals(config.getLevel()) &&
                                     before.getFireInvoke() != null &&
-                                    before.getFireInvoke().equals(config.getFireInvoke())) {
+                                    before.getFireInvoke().equals(config.getFireInvoke()) &&
+                                    before.getWxPush() != null &&
+                                    before.getWxPush().equals(config.getWxPush())) {
                                     return false;
                                 }
                             }
@@ -264,6 +266,7 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
         entity.setAlarmTime(System.currentTimeMillis());
         entity.setLevel(alarmConfigEntity.getLevel());
         entity.setFireInvoke(alarmConfigEntity.getFireInvoke());
+        entity.setWxPush(alarmConfigEntity.getWxPush());
         entity.setTargetType(targetInfo.getTargetType());
         entity.setTargetName(targetInfo.getTargetName());
         entity.setTargetId(targetInfo.getTargetId());
@@ -283,6 +286,7 @@ public class AlarmSceneHandler implements SceneFilter, CommandLineRunner {
             .set(AlarmRecordEntity::getAlarmName, config.getName())
             .set(AlarmRecordEntity::getLevel, config.getLevel())
             .set(AlarmRecordEntity::getFireInvoke, config.getFireInvoke())
+            .set(AlarmRecordEntity::getWxPush, config.getWxPush())
             .where(AlarmRecordEntity::getAlarmConfigId, config.getId())
             .execute();
     }

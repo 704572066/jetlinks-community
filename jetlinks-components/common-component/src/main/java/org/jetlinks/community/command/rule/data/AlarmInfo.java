@@ -37,6 +37,9 @@ public class AlarmInfo implements Serializable {
     @Schema(description = "是否显示app灭火操作")
     private Boolean fireInvoke;
 
+    @Schema(description = "是否向微信公众号推送告警信息")
+    private Boolean wxPush;
+
     @Schema(description = "告警目标类型")
     private String targetType;
 
