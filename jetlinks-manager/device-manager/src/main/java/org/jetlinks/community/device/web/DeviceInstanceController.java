@@ -207,8 +207,8 @@ public class DeviceInstanceController implements
     @Operation(summary = "获取设备地址分类")
     public Flux<Map<String, Object>> groupByCategory(@PathVariable @Parameter(description = "组织ID") String orgId) {
         return service.createQuery().where(DeviceInstanceEntity::getOrgId,orgId).fetch()
-                                                                                             .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
-                                                                                             .flatMap(group -> group.count()  // 统计每个组的数量
+                      .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+                      .flatMap(group -> group.count()  // 统计每个组的数量
                                              .map(
                                                  count -> {
 //                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
@@ -219,13 +219,57 @@ public class DeviceInstanceController implements
                                                  }
                                              )
                       )  // 将分组的 key 和 count 转换为 Entry
-                                                                                             .collectList()  // 收集到 List 中
+                      .collectList()  // 收集到 List 中
                       .map(list -> {
                           // Sort the list based on "key" (deviceAddress)
                           list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
                           return list;
                       })
-                                                                                             .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
+                      .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
+    }
+
+
+    // 按照 category 分组并统计每个组的数量
+    @GetMapping("/{orgId:.+}/address-category-stats")
+    @QueryAction
+    @Operation(summary = "获取设备地址分类")
+    public Flux<DeviceAddressStats> getDeviceAddressStats(@PathVariable @Parameter(description = "组织ID") String orgId) {
+        return service.createQuery().where(DeviceInstanceEntity::getOrgId,orgId).fetch()
+                                                                                             .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+
+                      // ② 对每组统计 online/offline/total
+                      .flatMapSequential(group ->
+                                             group.collectList().map(list -> {
+
+                                                 long online = list.stream()
+                                                                   .filter(d -> DeviceState.online.equals(d.getState()))
+                                                                   .count();
+
+                                                 long total = list.size();
+                                                 long offline = total - online;
+
+
+                                                 return new DeviceAddressStats(group.key(), online, offline, total);
+                                             })
+                      )
+//                      .flatMap(group -> group.count()  // 统计每个组的数量
+//                                             .map(
+//                                                 count -> {
+////                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+//                                                     Map<String, Object> result = new HashMap<>();
+//                                                     result.put("key", group.key()); // Set the group key
+//                                                     result.put("value", count);     // Set the group count
+//                                                     return result;
+//                                                 }
+//                                             )
+//                      )  // 将分组的 key 和 count 转换为 Entry
+                      .sort(Comparator.comparing(DeviceAddressStats::getAddress));
+//                      .map(list -> {
+//                          // Sort the list based on "key" (deviceAddress)
+//                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+//                          return list;
+//                      })
+
     }
 
     // 查询多个组织id下的所有设备
@@ -255,6 +299,50 @@ public class DeviceInstanceController implements
                       .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
     }
 
+    // 按照 category 分组并统计每个组的数量
+    @PostMapping("/address-category-stats")
+    @QueryAction
+    @Operation(summary = "获取设备地址分类")
+    public Flux<DeviceAddressStats> getDeviceAddressStats(@RequestBody @Parameter(description = "组织ID列表") List<String> orgIds) {
+        return service.createQuery().where().in(DeviceInstanceEntity::getOrgId,orgIds).fetch()
+                      .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+
+                      // ② 对每组统计 online/offline/total
+                      .flatMapSequential(group ->
+                                             group.collectList().map(list -> {
+
+                                                 long online = list.stream()
+                                                                   .filter(d -> DeviceState.online.equals(d.getState()))
+                                                                   .count();
+
+                                                 long total = list.size();
+                                                 long offline = total - online;
+
+
+                                                 return new DeviceAddressStats(group.key(), online, offline, total);
+                                             })
+                      )
+//                      .flatMap(group -> group.count()  // 统计每个组的数量
+//                                             .map(
+//                                                 count -> {
+////                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+//                                                     Map<String, Object> result = new HashMap<>();
+//                                                     result.put("key", group.key()); // Set the group key
+//                                                     result.put("value", count);     // Set the group count
+//                                                     return result;
+//                                                 }
+//                                             )
+//                      )  // 将分组的 key 和 count 转换为 Entry
+                      .sort(Comparator.comparing(DeviceAddressStats::getAddress));
+//                      .map(list -> {
+//                          // Sort the list based on "key" (deviceAddress)
+//                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+//                          return list;
+//                      })
+
+    }
+
+
     // 按照 category 分组并统计每个组的数量,admin显示所有设备
     @GetMapping("/admin/address-category")
     @QueryAction
@@ -282,7 +370,50 @@ public class DeviceInstanceController implements
                       .flatMapMany(Flux::fromIterable);  // 转换为 Flux 并返回
     }
 
-        //获取设备详情
+    // 按照 category 分组并统计每个组的数量,admin显示所有设备
+    @GetMapping("/admin/address-category-stats")
+    @QueryAction
+    @Operation(summary = "获取设备地址分类")
+    public Flux<DeviceAddressStats> getAdminDeviceAddressStats() {
+        return service.createQuery().fetch()
+                      .groupBy(item -> !item.getDeviceAddress().isEmpty() ? item.getDeviceAddress() : "其他")  // 按照 category 字段分
+
+                      // ② 对每组统计 online/offline/total
+                      .flatMapSequential(group ->
+                                             group.collectList().map(list -> {
+
+                                                 long online = list.stream()
+                                                                   .filter(d -> DeviceState.online.equals(d.getState()))
+                                                                   .count();
+
+                                                 long total = list.size();
+                                                 long offline = total - online;
+
+
+                                                 return new DeviceAddressStats(group.key(), online, offline, total);
+                                             })
+                      )
+//                      .flatMap(group -> group.count()  // 统计每个组的数量
+//                                             .map(
+//                                                 count -> {
+////                                                     new AbstractMap.SimpleEntry<>(group.key(), count)
+//                                                     Map<String, Object> result = new HashMap<>();
+//                                                     result.put("key", group.key()); // Set the group key
+//                                                     result.put("value", count);     // Set the group count
+//                                                     return result;
+//                                                 }
+//                                             )
+//                      )  // 将分组的 key 和 count 转换为 Entry
+                      .sort(Comparator.comparing(DeviceAddressStats::getAddress));
+//                      .map(list -> {
+//                          // Sort the list based on "key" (deviceAddress)
+//                          list.sort(Comparator.comparing(item -> (String) item.get("key")));  // Sort by key (deviceAddress)
+//                          return list;
+//                      })
+    }
+
+
+    //获取设备详情
     @GetMapping("/{id:.+}/config-metadata")
     @QueryAction
     @Operation(summary = "获取设备需要的配置定义信息")
@@ -1414,7 +1545,7 @@ public class DeviceInstanceController implements
             //得到orgid后terms再次过滤掉,防止在where(param)中报错
             param.setTerms(param.getTerms().stream()
                                 .filter(term -> !"orgId".equals(term.getColumn())).collect(Collectors.toList()) );
-            String sql = "SELECT o.id AS orgId, o.name AS orgName, COUNT(d.id) AS deviceNum FROM s_organization o LEFT JOIN dev_device_instance d ON d.org_id = o.id WHERE o.id in ("+ids+") GROUP BY o.id, o.name ORDER BY o.name";
+            String sql = "SELECT o.id AS orgId, o.name AS orgName, COUNT(d.id) AS deviceNum, SUM(CASE WHEN d.state = 'online' THEN 1 ELSE 0 END) AS onlineCount, SUM(CASE WHEN d.state = 'offline' THEN 1 ELSE 0 END) AS offlineCount  FROM s_organization o LEFT JOIN dev_device_instance d ON d.org_id = o.id WHERE o.id in ("+ids+") GROUP BY o.id, o.name ORDER BY o.name";
 
             // 移除 orgId 条件，防止 where(param) 重复
             param.setTerms(param.getTerms().stream()

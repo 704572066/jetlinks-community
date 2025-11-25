@@ -17,4 +17,10 @@ public class DeviceCompany {
 
     @Schema(description = "设备数量")
     private int deviceNum;
+
+    @Schema(description = "在线数量")
+    private int onlineCount;
+
+    @Schema(description = "离线数量")
+    private int offlineCount;
 }
