@@ -8,6 +8,7 @@ import org.hswebframework.web.i18n.LocaleUtils;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.system.authorization.api.entity.DimensionUserEntity;
 import org.hswebframework.web.system.authorization.defaults.service.DefaultDimensionService;
+import org.jetlinks.community.auth.service.OrganizationService;
 import org.jetlinks.community.auth.service.WeChatSubsribeService;
 import org.jetlinks.community.device.response.DeviceDetail;
 import org.jetlinks.community.device.service.LocalDeviceInstanceService;
@@ -31,6 +32,7 @@ import org.jetlinks.community.utils.ObjectMappers;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuples;
 import sun.reflect.generics.tree.VoidDescriptor;
 
 import java.time.Instant;
@@ -70,6 +72,8 @@ public class DefaultAlarmHandler implements AlarmHandler {
     private final LocalDeviceInstanceService localDeviceInstanceService;
 
     private final DefaultDimensionService defaultDimensionService;
+
+    private final OrganizationService organizationService;
 
     @Override
     public Mono<AlarmResult> triggerAlarm(AlarmInfo alarmInfo) {
@@ -116,84 +120,38 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                               // 转换为自定义的日期时间格式
                                               DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
                                               String alarmTime = now.format(formatter);
-//                                              localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
-//                                                                        .map(dev->dev.getOrgId())
-//                                                                        .filter(orgId -> orgId != null)
-//                                                                        .flatMap(orgId->defaultDimensionService.getCidByDimensionId(orgId))
-//                                                                        .filter(cidList -> !cidList.isEmpty())
-//                                                                        .flatMap(cidList->uniPushService.sendPostRequest("https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage", cidList, "设备告警 "+alarmTime,alarmInfo.getTargetName()+"["+alarmInfo.getSourceId()+"]: "+alarmInfo.getAlarmName(),"warning"))
-//                                                                        .subscribe(e->log.error("triggerAlarm unipush2.0 error: {}", e));
-
-//                                              localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
-//                                                                        .map(dev -> dev.getOrgId())
-//                                                                        .filter(orgId -> orgId != null)
-//                                                                        .flatMap(orgId -> defaultDimensionService.getByDimensionId(orgId))
-//                                                                        .filter(entity -> entity != null)
-//                                                                        .flatMap(entity -> {
-//                                                                            // Send to UniPush if CID is not empty
-//                                                                            log.warn("cid: "+entity.getCid());
-//                                                                            if (!entity.getCid().isEmpty()) {
-//                                                                                List<String> cidList = new ArrayList<>();
-//                                                                                cidList.add(entity.getCid());
-//                                                                                return uniPushService.sendPostRequest(
-//                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
-//                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
-//                                                                                    "设备告警 " + alarmTime,
-//                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
-//                                                                                    "warning")
-//                                                                                                     .then(Mono.just(entity));  // Ensure the entity continues down the flow
-//                                                                            }
-//                                                                            return Mono.just(entity);  // If no CID to send, just return entity
-//                                                                        })
-//                                                                        .flatMap(entity -> weChatSubsribeService.findByUnionId(entity.getUnionid()))
-//                                                                        .filter(Objects::nonNull)
-//                                                                        .filter(subscriber -> !subscriber.getId().isEmpty())
-//                                                                        .flatMap(subscriber -> weChatPushService.sendPostRequest(
-//                                                                            subscriber.getId(),
-//                                                                            alarmTime,
-//                                                                            alarmInfo.getTargetName(),
-//                                                                            alarmInfo.getSourceId(),
-//                                                                            alarmInfo.getAlarmName()
-//                                                                        ))
-//                                                                        .subscribe(e->log.error("triggerAlarm push error: {}", e));
-//                                                                        .doOnError(e -> log.error("Error processing alarm push: {}", e))  // Log errors
-//                                                                        .onErrorResume(e -> Mono.empty());  // Avoid stream termination due to error
+                                              organizationService.findById(alarmInfo.getSourceId());
+//
                                               localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
                                                                         .map(dev -> dev.getOrgId())
                                                                         .filter(orgId -> orgId != null)
-                                                                        .flatMap(orgId -> defaultDimensionService.getDimensionUserListByDimensionId(orgId))
-                                                                        .filter(entityList -> !entityList.isEmpty())
-                                                                        .flatMap(entityList -> {
+                                                                        // 查询组织名称
+                                                                        .flatMap(orgId ->
+                                                                                     organizationService.findById(orgId)
+                                                                                                        .map(org -> Tuples
+                                                                                                            .of(org.getName(), orgId))
+                                                                        )
+                                                                        .flatMap(tuple -> defaultDimensionService.getDimensionUserListByDimensionId(tuple.getT2()).map(users -> Tuples.of(tuple.getT1(), users)))
+//                                                                        .filter(entityList -> !entityList.isEmpty())
+                                                                        .filter(tuple -> !tuple.getT2().isEmpty())
+                                                                        .flatMap(tuple -> {
                                                                             // Send to UniPush if CID is not empty
-                                                                            List<String> cidList = entityList.stream()
-                                                                                                             .map(DimensionUserEntity::getCid) // Apply the transformation: getName() of each Entity
-                                                                                                             .filter(cid -> cid != null && !cid.isEmpty())
-                                                                                                             .collect(Collectors
-                                                                                                                          .toList()); // Collect the result into a new list
-//                                                                            log.warn("cid: "+entity.getCid());
-//                                                                            if (!cidList.isEmpty()) {
-//                                                                                return uniPushService.sendPostRequest(
-//                                                                                    "https://fc-mp-d03ca3a4-ad75-4a9d-b7e3-05ac8fb91905.next.bspapp.com/sendMessage",
-//                                                                                    cidList,  // Assuming 'cid' is a List<String> for the POST request
-//                                                                                    "设备告警 " + alarmTime,
-//                                                                                    alarmInfo.getTargetName() + "[" + alarmInfo.getSourceId() + "]: " + alarmInfo.getAlarmName(),
-//                                                                                    "warning")
-//                                                                                                     .then(Mono.just(entityList));  // Ensure the entity continues down the flow
-//                                                                            }
-                                                                            return Mono.just(entityList);  // If no CID to send, just return entity
-                                                                        })
-                                                                        .flatMap(entityList -> {
-                                                                            List<String> unionidList = entityList.stream()
-                                                                                                             .map(DimensionUserEntity::getUnionid) // Apply the transformation: getName() of each Entity
-                                                                                                             .collect(Collectors
-                                                                                                                          .toList()); // Collect the result into a new list
+                                                                            String orgName = tuple.getT1();
+                                                                            List<DimensionUserEntity> entityList = tuple.getT2();
 //
-                                                                            return weChatSubsribeService.findOpenidListByUnionId(unionidList);
+                                                                            List<String> unionidList = entityList.stream()
+                                                                                                                 .map(DimensionUserEntity::getUnionid) // Apply the transformation: getName() of each Entity
+                                                                                                                 .collect(Collectors
+                                                                                                                              .toList()); // Collect the result into a new list
+//
+                                                                            return weChatSubsribeService.findOpenidListByUnionId(unionidList).map(openids -> Tuples.of(orgName, openids));
 
+//
                                                                         })
-//                                                                        .filter(openidList -> !openidList.isEmpty())
-//                                                                        .filter(openid -> !openid.isEmpty())
-                                                                        .flatMap(openids -> {
+
+                                                                        .flatMap(tuple -> {
+                                                                            String orgName = tuple.getT1();
+                                                                            List<String> openids = tuple.getT2();
                                                                             // Send requests for each openid asynchronously
                                                                             List<Mono<Void>> sendRequests = openids.stream()
                                                                                                                    .filter(openid -> openid != null && !openid.isEmpty())  // Check if each openid is valid
@@ -202,7 +160,8 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                                                                                                            openid,
                                                                                                                            alarmTime,
                                                                                                                            alarmInfo.getSourceName(),
-                                                                                                                           alarmInfo.getSourceId(),
+//                                                                                                                           alarmInfo.getSourceId(),
+                                                                                                                           orgName,
                                                                                                                            alarmInfo.getAlarmName()
                                                                                                                        ).onErrorResume(e -> {
                                                                                                                            log.error("Failed to send alarm to openid {}: {}", openid, e.getMessage());

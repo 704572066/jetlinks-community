@@ -27,19 +27,19 @@ public class WeChatPushService {
 //        this.localDeviceInstanceService = new LocalDeviceInstanceService();
     }
 
-    public Mono<Void> sendPostRequest(String openId, String alarmTime, String sourceName, String sourceId, String alarmName) {
+    public Mono<Void> sendPostRequest(String openId, String alarmTime, String sourceName, String orgName, String alarmName) {
 
         Map<String, String> data = new HashMap<>();
         data.put("first", "设备告警通知");
         data.put("time3", alarmTime);
-        data.put("character_string11", sourceId);
+        data.put("thing77", orgName);
         data.put("thing33", alarmName);
         data.put("thing23", sourceName);
         data.put("remark", "点击查看详情");
 //        Map<String, String> miniprogram = new HashMap<>();
 //        miniprogram.put("appid", "wxe861fc6383450e16");
 
-        String messageJson = buildTemplateMessage(openId, "A9sE1bUz-rXKhuGXferRKX42E6a7reQaaYccLmAbDOU", "", data);
+        String messageJson = buildTemplateMessage(openId, "A9sE1bUz-rXKhuGXferRKdQ7bleAWVStUwLvPdfLRWs", "", data);
 //            String result = weChat.sendTemplateMessage(accessToken, messageJson);
         return getToken("wx22e05e45ecb42885", "da4f9951b24d2bdf03439a26f68efb76")
         .flatMap(token->{
