@@ -27,7 +27,7 @@ public class WeChatPushService {
 //        this.localDeviceInstanceService = new LocalDeviceInstanceService();
     }
 
-    public Mono<Void> sendPostRequest(String openId, String alarmTime, String sourceName, String orgName, String alarmName) {
+    public Mono<Void> sendPostRequest(String openId, String alarmTime, String sourceName, String sourceId, String orgName, String alarmName, String groupName) {
 
         Map<String, String> data = new HashMap<>();
         data.put("first", "设备告警通知");
@@ -39,7 +39,7 @@ public class WeChatPushService {
 //        Map<String, String> miniprogram = new HashMap<>();
 //        miniprogram.put("appid", "wxe861fc6383450e16");
 
-        String messageJson = buildTemplateMessage(openId, "A9sE1bUz-rXKhuGXferRKdQ7bleAWVStUwLvPdfLRWs", "", data);
+        String messageJson = buildTemplateMessage(openId, sourceId,"A9sE1bUz-rXKhuGXferRKdQ7bleAWVStUwLvPdfLRWs", "", data, groupName, sourceName);
 //            String result = weChat.sendTemplateMessage(accessToken, messageJson);
         return getToken("wx22e05e45ecb42885", "da4f9951b24d2bdf03439a26f68efb76")
         .flatMap(token->{
@@ -77,7 +77,7 @@ public class WeChatPushService {
                         });
     }
 
-    public String buildTemplateMessage(String toUser, String templateId, String url, Map<String, String> data) {
+    public String buildTemplateMessage(String toUser, String sourceId, String templateId, String url, Map<String, String> data, String groupName, String name) {
         JSONObject messageJson = new JSONObject();
         messageJson.put("touser", toUser);
         messageJson.put("template_id", templateId);
@@ -93,6 +93,11 @@ public class WeChatPushService {
 
         JSONObject miniprogram = new JSONObject();
         miniprogram.put("appid","wxe861fc6383450e16");
+        //跳转到小程序的页面路径
+        if(!groupName.equals(""))
+            miniprogram.put("pagepath", "/pages/monitoring-center/device/device-detail?id="+sourceId+"&groupName="+groupName+"&name="+name);
+//        miniprogram.put("pagepath","/pages/monitoring-center/device/device-detail?id=${val.deviceId}&groupName=${val.groupName}");
+//        miniprogram.put("pagepath","/pages/monitoring-center/device/device-channel?id="+sourceId);
 
 
         messageJson.put("data", dataJson);

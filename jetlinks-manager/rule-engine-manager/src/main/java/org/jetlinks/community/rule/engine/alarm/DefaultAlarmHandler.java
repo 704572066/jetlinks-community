@@ -1,7 +1,12 @@
 package org.jetlinks.community.rule.engine.alarm;
 
+import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.core.ObjectCodec;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.hswebframework.ezorm.rdb.mapping.ReactiveRepository;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.i18n.LocaleUtils;
@@ -12,10 +17,13 @@ import org.jetlinks.community.auth.service.OrganizationService;
 import org.jetlinks.community.auth.service.WeChatSubsribeService;
 import org.jetlinks.community.device.response.DeviceDetail;
 import org.jetlinks.community.device.service.LocalDeviceInstanceService;
+import org.jetlinks.community.device.service.LocalDeviceProductService;
 import org.jetlinks.community.rule.engine.service.UniPushService;
 import org.jetlinks.community.rule.engine.service.WeChatPushService;
+import org.jetlinks.community.terms.TermSpec;
 import org.jetlinks.core.config.ConfigStorageManager;
 import org.jetlinks.core.event.EventBus;
+import org.jetlinks.core.metadata.PropertyMetadata;
 import org.jetlinks.core.utils.Reactors;
 import org.jetlinks.community.command.rule.data.AlarmInfo;
 import org.jetlinks.community.command.rule.data.AlarmResult;
@@ -29,8 +37,10 @@ import org.jetlinks.community.rule.engine.service.AlarmHistoryService;
 import org.jetlinks.community.rule.engine.service.AlarmRecordService;
 import org.jetlinks.community.topic.Topics;
 import org.jetlinks.community.utils.ObjectMappers;
+import org.jetlinks.supports.official.DefaultThingsMetadata;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 import sun.reflect.generics.tree.VoidDescriptor;
@@ -41,6 +51,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -71,9 +82,14 @@ public class DefaultAlarmHandler implements AlarmHandler {
 
     private final LocalDeviceInstanceService localDeviceInstanceService;
 
+    private final LocalDeviceProductService localDeviceProductService;
+
     private final DefaultDimensionService defaultDimensionService;
 
     private final OrganizationService organizationService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
 
     @Override
     public Mono<AlarmResult> triggerAlarm(AlarmInfo alarmInfo) {
@@ -123,15 +139,16 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                               organizationService.findById(alarmInfo.getSourceId());
 //
                                               localDeviceInstanceService.findByDeviceId(alarmInfo.getSourceId())
-                                                                        .map(dev -> dev.getOrgId())
-                                                                        .filter(orgId -> orgId != null)
-                                                                        // 查询组织名称
-                                                                        .flatMap(orgId ->
-                                                                                     organizationService.findById(orgId)
-                                                                                                        .map(org -> Tuples
-                                                                                                            .of(org.getName(), orgId))
+                                                                        .filter(dev -> dev.getOrgId() != null)
+                                                                        .flatMap(dev ->
+                                                                                     organizationService.findById(dev.getOrgId())
+                                                                                                        .map(org -> Tuples.of(
+                                                                                                            org.getName(),
+                                                                                                            dev.getOrgId(),
+                                                                                                            dev.getProductId()
+                                                                                                        ))
                                                                         )
-                                                                        .flatMap(tuple -> defaultDimensionService.getDimensionUserListByDimensionId(tuple.getT2()).map(users -> Tuples.of(tuple.getT1(), users)))
+                                                                        .flatMap(tuple -> defaultDimensionService.getDimensionUserListByDimensionId(tuple.getT2()).map(users -> Tuples.of(tuple.getT1(), users, tuple.getT3())))
 //                                                                        .filter(entityList -> !entityList.isEmpty())
                                                                         .filter(tuple -> !tuple.getT2().isEmpty())
                                                                         .flatMap(tuple -> {
@@ -144,34 +161,62 @@ public class DefaultAlarmHandler implements AlarmHandler {
                                                                                                                  .collect(Collectors
                                                                                                                               .toList()); // Collect the result into a new list
 //
-                                                                            return weChatSubsribeService.findOpenidListByUnionId(unionidList).map(openids -> Tuples.of(orgName, openids));
+                                                                            return weChatSubsribeService.findOpenidListByUnionId(unionidList).map(openids -> Tuples.of(orgName, openids, tuple.getT3()));
 
 //
                                                                         })
 
                                                                         .flatMap(tuple -> {
+
                                                                             String orgName = tuple.getT1();
                                                                             List<String> openids = tuple.getT2();
-                                                                            // Send requests for each openid asynchronously
-                                                                            List<Mono<Void>> sendRequests = openids.stream()
-                                                                                                                   .filter(openid -> openid != null && !openid.isEmpty())  // Check if each openid is valid
-                                                                                                                   .map(openid -> {
-                                                                                                                       return weChatPushService.sendPostRequest(
-                                                                                                                           openid,
-                                                                                                                           alarmTime,
-                                                                                                                           alarmInfo.getSourceName(),
-//                                                                                                                           alarmInfo.getSourceId(),
-                                                                                                                           orgName,
-                                                                                                                           alarmInfo.getAlarmName()
-                                                                                                                       ).onErrorResume(e -> {
-                                                                                                                           log.error("Failed to send alarm to openid {}: {}", openid, e.getMessage());
-                                                                                                                           return Mono.empty();  // Continue the flow even if one request fails
-                                                                                                                       });
-                                                                                                                   })
-                                                                                                                   .collect(Collectors.toList());
+                                                                            String productId = tuple.getT3();
 
-                                                                            // Use Mono.when to combine multiple Mono operations and wait for all to complete
-                                                                            return Mono.when(sendRequests);
+//                                                                            String propertyId =
+//                                                                                updatedRecord.getTermSpec()
+//                                                                                             .getColumn()
+//                                                                                             .split("_")[0];
+                                                                            String propertyId = getPropertyId(updatedRecord.getTermSpec());
+
+                                                                            return localDeviceProductService.findById(productId)
+
+                                                                                                            .flatMap(product -> {
+
+                                                                                                                String groupName =
+                                                                                                                    getGroupName(
+                                                                                                                        product.getMetadata(),
+                                                                                                                        propertyId
+                                                                                                                    );
+
+                                                                                                                List<Mono<Void>> sendRequests =
+                                                                                                                    openids.stream()
+                                                                                                                           .filter(StringUtils::hasText)
+                                                                                                                           .distinct()
+                                                                                                                           .map(openid ->
+                                                                                                                                    weChatPushService.sendPostRequest(
+                                                                                                                                        openid,
+                                                                                                                                        alarmTime,
+                                                                                                                                        alarmInfo.getSourceName(),
+                                                                                                                                        alarmInfo.getSourceId(),
+                                                                                                                                        orgName,
+                                                                                                                                        alarmInfo.getAlarmName(),
+                                                                                                                                        groupName // 用groupName替换actualDesc
+                                                                                                                                    )
+                                                                                                                                                     .onErrorResume(e -> {
+
+                                                                                                                                                         log.error(
+                                                                                                                                                             "Failed to send alarm to openid {}",
+                                                                                                                                                             openid,
+                                                                                                                                                             e
+                                                                                                                                                         );
+
+                                                                                                                                                         return Mono.empty();
+                                                                                                                                                     })
+                                                                                                                           )
+                                                                                                                           .collect(Collectors.toList());
+
+                                                                                                                return Mono.when(sendRequests);
+                                                                                                            });
                                                                         })
                                                                         .doOnTerminate(() -> {
                                                                             log.info("Finished processing all push requests");
@@ -399,5 +444,57 @@ public class DefaultAlarmHandler implements AlarmHandler {
         result.setLastAlarmTime(cache.lastAlarmTime);
         result.setAlarming(cache.isAlarming());
         return result;
+    }
+
+    private String getGroupName(String metadataJson, String propertyId) {
+
+        DefaultThingsMetadata metadata =
+            new DefaultThingsMetadata(
+                JSONObject.parseObject(metadataJson)
+            );
+
+        PropertyMetadata property = metadata.getPropertyOrNull(propertyId);
+
+        if (property == null) {
+            return "";
+        }
+
+        return Optional
+            .ofNullable(property.getExpands())
+            .map(expands -> expands.get("groupName"))
+            .map(String::valueOf)
+            .orElse("");
+    }
+
+    private String getPropertyId(TermSpec termSpec) {
+
+        if (termSpec == null) {
+            return null;
+        }
+
+        if (StringUtils.hasText(termSpec.getColumn())) {
+
+            String column = termSpec.getColumn();
+
+            int idx = column.indexOf('_');
+
+            return idx > 0
+                ? column.substring(0, idx)
+                : column;
+        }
+
+        if (CollectionUtils.isNotEmpty(termSpec.getChildren())) {
+
+            for (TermSpec child : termSpec.getChildren()) {
+
+                String propertyId = getPropertyId(child);
+
+                if (propertyId != null) {
+                    return propertyId;
+                }
+            }
+        }
+
+        return null;
     }
 }
